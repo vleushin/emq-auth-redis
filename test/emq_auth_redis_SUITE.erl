@@ -24,9 +24,9 @@
 
 -include("emq_auth_redis.hrl").
 
--define(INIT_ACL, [{"mqtt_acl/:test1", ["topic1", "2"]},
-                   {"mqtt_acl/:test2", ["topic2", "1"]},
-                   {"mqtt_acl/:test3", ["topic3", "3"]}]).
+-define(INIT_ACL, [{"mqtt_acl:test1", "topic1", "2"},
+                   {"mqtt_acl:test2", "topic2", "1"},
+                   {"mqtt_acl:test3", "topic3", "3"}]).
 
 -define(INIT_AUTH, [{"mqtt_user:root", "is_superuser", "1"},
                     {"mqtt_user:user1", "password", "testpwd"}]).
@@ -56,20 +56,19 @@ end_per_suite(_Config) ->
 check_acl(Config) ->
     Connection = proplists:get_value(connection, Config),
     Keys = [Key || {Key, _Value} <- ?INIT_ACL],
-    R = [eredis:q(Connection, ["HMSET", Hash | HashObj]) || {Hash, HashObj} <- ?INIT_ACL],
-    ct:log("R:~p", [R]),
+    [eredis:q(Connection, ["HSET", Key, Filed, Value]) || {Key, Filed, Value} <- ?INIT_ACL],
     User1 = #mqtt_client{client_id = <<"client1">>, username = <<"test1">>},
     User2 = #mqtt_client{client_id = <<"client2">>, username = <<"test2">>},
     User3 = #mqtt_client{client_id = <<"client3">>, username = <<"test3">>},
     User4 = #mqtt_client{client_id = <<"client4">>, username = <<"$$user4">>},
     deny = emqttd_access_control:check_acl(User1, subscribe, <<"topic1">>),
-    deny = emqttd_access_control:check_acl(User1, publish, <<"topic1">>),
+    allow = emqttd_access_control:check_acl(User1, publish, <<"topic1">>),
 
     deny = emqttd_access_control:check_acl(User2, publish, <<"topic2">>),
-    deny = emqttd_access_control:check_acl(User2, subscribe, <<"topic2">>),
+    allow = emqttd_access_control:check_acl(User2, subscribe, <<"topic2">>),
     
-    deny = emqttd_access_control:check_acl(User3, publish, <<"topic3">>),
-    deny = emqttd_access_control:check_acl(User3, subscribe, <<"topic3">>),
+    allow = emqttd_access_control:check_acl(User3, publish, <<"topic3">>),
+    allow = emqttd_access_control:check_acl(User3, subscribe, <<"topic3">>),
     
     allow = emqttd_access_control:check_acl(User4, publish, <<"a/b/c">>),
     eredis:q(Connection, ["DEL" | Keys]).
@@ -78,7 +77,6 @@ check_auth(Config) ->
     Connection = proplists:get_value(connection, Config),
     Keys = [Key || {Key, _Filed, _Value} <- ?INIT_AUTH],
     [eredis:q(Connection, ["HSET", Key, Filed, Value]) || {Key, Filed, Value} <- ?INIT_AUTH],
-
     User1 = #mqtt_client{client_id = <<"client1">>, username = <<"user1">>},
     User2 = #mqtt_client{client_id = <<"client2">>, username = <<"root">>},
     User3 = #mqtt_client{client_id = <<"client3">>},
