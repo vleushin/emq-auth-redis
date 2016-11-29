@@ -38,16 +38,18 @@ check(#mqtt_client{username = Username}, Password, _State)
 check(Client, Password, #state{auth_cmd  = AuthCmd,
                                super_cmd = SuperCmd,
                                hash_type = HashType}) ->
-    Result = case emq_auth_redis_cli:q(AuthCmd, Client) of
-                {ok, undefined} ->
-                    {error, not_found};
-                {ok, HashPass} ->
-                    check_pass(HashPass, Password, HashType);
-                {error, Reason} ->
-                    {error, Reason}
-             end,
-    case Result of ok -> {ok, is_superuser(SuperCmd, Client)}; Error -> Error end.
-
+    case emq_auth_redis_cli:q(AuthCmd, Client) of
+        {ok, undefined} ->
+            ignore;
+        {ok, HashPass} ->
+            case check_pass(HashPass, Password, HashType) of 
+                ok -> {ok, is_superuser(SuperCmd, Client)}; 
+                Error -> Error 
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
+    
 check_pass(PassHash, Password, HashType) ->
     case emqttd_auth_mod:passwd_hash(HashType, Password) of
         PassHash -> ok;
