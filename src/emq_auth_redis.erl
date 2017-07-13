@@ -35,19 +35,19 @@ check(#mqtt_client{username = Username}, Password, _State)
     when ?UNDEFINED(Username); ?UNDEFINED(Password) ->
     {error, username_or_password_undefined};
 
-check(Client = #mqtt_client{username = Username}, Password, #state{auth_cmd = AuthCmd,
+check(Client, Password, #state{auth_cmd = AuthCmd,
     super_cmd = SuperCmd,
     hash_type = HashType}) ->
     Result = case check_client_id(Client) of
                  ok -> case emq_auth_redis_cli:q(AuthCmd, Password, Client) of
                            {ok, PassHash} when is_binary(PassHash) ->
-                               check_pass(PassHash, Username, HashType); % Username is swapped with Password, needed for reverse lookup
+                               check_pass(PassHash, Password, HashType);
                            {ok, [undefined | _]} ->
                                ignore;
                            {ok, [PassHash]} ->
-                               check_pass(PassHash, Username, HashType); % Username is swapped with Password,, needed for reverse lookup
+                               check_pass(PassHash, Password, HashType);
                            {ok, [PassHash, Salt | _]} ->
-                               check_pass(PassHash, Salt, Username, HashType); % Username is swapped with Password, needed for reverse lookup
+                               check_pass(PassHash, Salt, Password, HashType);
                            {error, Reason} ->
                                {error, Reason}
                        end;
