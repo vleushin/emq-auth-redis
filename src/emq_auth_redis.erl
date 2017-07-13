@@ -35,27 +35,33 @@ check(#mqtt_client{username = Username}, Password, _State)
     when ?UNDEFINED(Username); ?UNDEFINED(Password) ->
     {error, username_or_password_undefined};
 
-check(Client, Password, #state{auth_cmd  = AuthCmd,
-                               super_cmd = SuperCmd,
-                               hash_type = HashType}) ->
-    Result = case emq_auth_redis_cli:q(AuthCmd, Client) of
-                {ok, PassHash} when is_binary(PassHash) ->
-                    check_pass(PassHash, Password, HashType);  
-                {ok, [undefined|_]} ->
-                    ignore;
-                {ok, [PassHash]} ->
-                    check_pass(PassHash, Password, HashType);
-                {ok, [PassHash, Salt|_]} ->
-                    check_pass(PassHash, Salt, Password, HashType);
-                {error, Reason} ->
-                    {error, Reason}
+check(Client = #mqtt_client{username = Username}, Password, #state{auth_cmd = AuthCmd,
+    super_cmd = SuperCmd,
+    hash_type = HashType}) ->
+    Result = case check_client_id(Client) of
+                 ok -> case emq_auth_redis_cli:q(AuthCmd, Password, Client) of
+                           {ok, PassHash} when is_binary(PassHash) ->
+                               check_pass(PassHash, Username, HashType); % Username is swapped with Password, needed for reverse lookup
+                           {ok, [undefined | _]} ->
+                               ignore;
+                           {ok, [PassHash]} ->
+                               check_pass(PassHash, Username, HashType); % Username is swapped with Password,, needed for reverse lookup
+                           {ok, [PassHash, Salt | _]} ->
+                               check_pass(PassHash, Salt, Username, HashType); % Username is swapped with Password, needed for reverse lookup
+                           {error, Reason} ->
+                               {error, Reason}
+                       end;
+                 _Error -> _Error
              end,
-    case Result of ok -> {ok, is_superuser(SuperCmd, Client)}; Error -> Error end.
+    case Result of
+        ok -> {ok, is_superuser(SuperCmd, Password, Client)};
+        Error -> Error
+    end.
 
 check_pass(PassHash, Password, HashType) ->
     check_pass(PassHash, hash(HashType, Password)).
 check_pass(PassHash, Salt, Password, {pbkdf2, Macfun, Iterations, Dklen}) ->
-  check_pass(PassHash, hash(pbkdf2, {Salt, Password, Macfun, Iterations, Dklen}));
+    check_pass(PassHash, hash(pbkdf2, {Salt, Password, Macfun, Iterations, Dklen}));
 check_pass(PassHash, Salt, Password, {salt, bcrypt}) ->
     check_pass(PassHash, hash(bcrypt, {Salt, Password}));
 check_pass(PassHash, Salt, Password, {salt, HashType}) ->
@@ -64,20 +70,34 @@ check_pass(PassHash, Salt, Password, {HashType, salt}) ->
     check_pass(PassHash, hash(HashType, <<Password/binary, Salt/binary>>)).
 
 check_pass(PassHash, PassHash) -> ok;
-check_pass(_, _)               -> {error, password_error}.
+check_pass(_, _) -> {error, password_error}.
 
 description() -> "Authentication with Redis".
 
 hash(Type, Password) -> emqttd_auth_mod:passwd_hash(Type, Password).
 
--spec(is_superuser(undefined | list(), mqtt_client()) -> boolean()).
-is_superuser(undefined, _Client) ->
+-spec(is_superuser(undefined | list(), string(), mqtt_client()) -> boolean()).
+is_superuser(undefined, _Password, _Client) ->
     false;
-is_superuser(SuperCmd, Client) ->
-    case emq_auth_redis_cli:q(SuperCmd, Client) of
+is_superuser(SuperCmd, Password, Client) ->
+    case emq_auth_redis_cli:q(SuperCmd, Password, Client) of
         {ok, undefined} -> false;
-        {ok, <<"1">>}   -> true;
-        {ok, _Other}    -> false;
+        {ok, <<"1">>} -> true;
+        {ok, _Other} -> false;
         {error, _Error} -> false
     end.
 
+% We expect ClientId to be in format username_someid to prevent ClientId abuse
+check_client_id(#mqtt_client{username = Username, client_id = ClientId}) ->
+    case byte_size(ClientId) =< byte_size(Username) + 1 of
+        true ->
+            {error, "Bad client id"};
+        false ->
+            ExpectedScope = {0, byte_size(Username) + 1},
+            case binary:match(ClientId, <<Username/binary, "_">>, [{scope, ExpectedScope}]) of
+                ExpectedScope ->
+                    ok;
+                _Rest ->
+                    {error, "Bad client id"}
+            end
+    end.

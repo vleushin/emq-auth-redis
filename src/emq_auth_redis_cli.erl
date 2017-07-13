@@ -24,7 +24,7 @@
 
 -define(ENV(Key, Opts), proplists:get_value(Key, Opts)).
 
--export([connect/1, q/2]).
+-export([connect/1, q/3]).
 
 %%--------------------------------------------------------------------
 %% Redis Connect/Query
@@ -40,14 +40,17 @@ connect(Opts) ->
 %% Redis Query.
 -spec(q(string(), mqtt_client()) -> {ok, undefined | binary() | list()} | {error, atom() | binary()}).
 q(CmdStr, Client) ->
-    Cmd = string:tokens(replvar(CmdStr, Client), " "),
+    q(CmdStr, "", Client).
+-spec(q(string(), string(), mqtt_client()) -> {ok, undefined | binary() | list()} | {error, atom() | binary()}).
+q(CmdStr, Password, Client) ->
+    Cmd = string:tokens(replvar(CmdStr, Password, Client), " "),
     ecpool:with_client(?APP, fun(C) -> eredis:q(C, Cmd) end).
 
-replvar(Cmd, #mqtt_client{client_id = ClientId, username = Username}) ->
-    replvar(replvar(Cmd, "%u", Username), "%c", ClientId).
+replvar(Cmd, Password, #mqtt_client{client_id = ClientId, username = Username}) ->
+    replvar_(replvar_(replvar_(Cmd, "%u", Username), "%c", ClientId), "%p", Password).
 
-replvar(S, _Var, undefined) ->
+replvar_(S, _Var, undefined) ->
     S;
-replvar(S, Var, Val) ->
+replvar_(S, Var, Val) ->
     re:replace(S, Var, Val, [{return, list}]).
 
