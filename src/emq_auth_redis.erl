@@ -81,6 +81,8 @@ is_superuser(undefined, _Password, _Client) ->
     false;
 is_superuser("undefined", _Password, _Client) ->
     false;
+is_superuser(<<"undefined">>, _Password, _Client) ->
+    false;
 is_superuser(SuperCmd, Password, Client) ->
     case emq_auth_redis_cli:q(SuperCmd, Password, Client) of
         {ok, undefined} -> false;
