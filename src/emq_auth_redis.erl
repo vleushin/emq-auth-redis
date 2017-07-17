@@ -44,6 +44,8 @@ check(Client, Password, #state{auth_cmd = AuthCmd,
                                check_pass(PassHash, Password, HashType);
                            {ok, [undefined | _]} ->
                                ignore;
+                           {ok, undefined} ->
+                               ignore;
                            {ok, [PassHash]} ->
                                check_pass(PassHash, Password, HashType);
                            {ok, [PassHash, Salt | _]} ->
