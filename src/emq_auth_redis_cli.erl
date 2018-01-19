@@ -38,9 +38,6 @@ connect(Opts) ->
     no_reconnect).
 
 %% Redis Query.
--spec(q(string(), mqtt_client()) -> {ok, undefined | binary() | list()} | {error, atom() | binary()}).
-q(CmdStr, Client) ->
-  q(CmdStr, "", Client).
 -spec(q(string(), string(), mqtt_client()) -> {ok, undefined | binary() | list()} | {error, atom() | binary()}).
 q(CmdStr, Password, Client) ->
   Cmd = string:tokens(replvar(CmdStr, Password, Client), " "),

@@ -44,6 +44,8 @@ check(Client, Password, #state{auth_cmd = AuthCmd,
                        check_pass(PassHash, Password, HashType);
                      {ok, [undefined | _]} ->
                        ignore;
+                     {ok, undefined} ->
+                       ignore;
                      {ok, [PassHash]} ->
                        check_pass(PassHash, Password, HashType);
                      {ok, [PassHash, Salt | _]} ->
@@ -54,7 +56,7 @@ check(Client, Password, #state{auth_cmd = AuthCmd,
              _Error -> _Error
            end,
   case Result of
-    ok -> {ok, is_superuser(SuperCmd, Client)};
+    ok -> {ok, is_superuser(SuperCmd, Password, Client)};
     Error -> Error
   end.
 
@@ -76,21 +78,20 @@ description() -> "Authentication with Redis".
 
 hash(Type, Password) -> emqttd_auth_mod:passwd_hash(Type, Password).
 
--spec(is_superuser(undefined | list(), mqtt_client()) -> boolean()).
-is_superuser(undefined, _Client) ->
+-spec(is_superuser(undefined | list(), string(), mqtt_client()) -> boolean()).
+is_superuser(undefined, _Password, _Client) ->
   false;
-is_superuser("undefined", _Client) ->
+is_superuser("undefined", _Password, _Client) ->
   false;
-is_superuser(<<"undefined">>, _Client) ->
+is_superuser(<<"undefined">>, _Password, _Client) ->
   false;
-is_superuser(SuperCmd, Client) ->
-  case emq_auth_redis_cli:q(SuperCmd, Client) of
+is_superuser(SuperCmd, Password, Client) ->
+  case emq_auth_redis_cli:q(SuperCmd, Password, Client) of
     {ok, undefined} -> false;
     {ok, <<"1">>} -> true;
     {ok, _Other} -> false;
     {error, _Error} -> false
   end.
-
 
 % We expect ClientId to be in format username_someid to prevent ClientId abuse
 check_client_id(#mqtt_client{username = Username, client_id = ClientId}) ->
