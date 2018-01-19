@@ -39,7 +39,7 @@ check(Client, Password, #state{auth_cmd = AuthCmd,
   super_cmd = SuperCmd,
   hash_type = HashType}) ->
   Result = case check_client_id(Client) of
-             ok -> case emq_auth_redis_cli:q(AuthCmd, Client) of
+             ok -> case emq_auth_redis_cli:q(AuthCmd, Password, Client) of
                      {ok, PassHash} when is_binary(PassHash) ->
                        check_pass(PassHash, Password, HashType);
                      {ok, [undefined | _]} ->
